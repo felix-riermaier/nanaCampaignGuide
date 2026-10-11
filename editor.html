@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide Step Editor</title>
+<style>
+  :root {
+    --bg: #14110e;
+    --panel: #1e1a16;
+    --panel-2: #26211b;
+    --border: #3a3128;
+    --text: #e8dfd2;
+    --muted: #9a8e7e;
+    --accent: #c8a45a;
+    --town: #6fa3c7;
+    --danger: #b5523f;
+    --xp: #a98bd0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px 64px; }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; color: var(--accent); font-weight: 600; }
+  .file { color: var(--muted); font-size: 13px; }
+  .file b { color: var(--text); font-weight: 600; }
+  .file .dirty { color: var(--accent); }
+  .spacer { flex: 1; }
+
+  button, select, input[type=text] {
+    font: inherit; color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  button { cursor: pointer; padding: 5px 12px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #1a140c; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.icon { padding: 2px 8px; color: var(--muted); }
+  button.icon.del:hover { border-color: var(--danger); color: var(--danger); }
+  select { padding: 4px 6px; cursor: pointer; }
+  input[type=text] { padding: 4px 8px; min-width: 0; }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); }
+  input[type=text]:invalid { border-color: var(--danger); }
+
+  .switch { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; background: var(--panel); color: var(--muted); }
+  .switch button + button { border-left: 1px solid var(--border); }
+  .switch button[aria-pressed="true"] { background: var(--accent); color: #1a140c; font-weight: 600; }
+
+  .errors {
+    border: 1px solid var(--danger); border-radius: 6px;
+    background: #2a1712; color: #f0c4b8;
+    padding: 10px 12px; margin-top: 16px;
+    font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap;
+  }
+  .empty { color: var(--muted); margin-top: 48px; text-align: center; line-height: 1.8; }
+
+  h2.act { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 20px 0 4px; }
+
+  /* Step cards */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 6px;
+  }
+  .card.town { border-left-color: var(--town); }
+  .card-head {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border-radius: 6px 6px 0 0;
+  }
+  .card-head .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 26px; }
+  .card-head .zone-name { flex: 1 1 200px; font-weight: 600; }
+  .card-head .town-title { flex: 1 1 200px; font-weight: 600; color: var(--town); }
+  .card-head label { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+  .card-head .lvl input { width: 80px; }
+  .card-head .id { color: var(--muted); font: 11px ui-monospace, Consolas, monospace; opacity: .7; }
+  input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; margin: 0; }
+
+  .card.conditional { border-style: dashed; border-left-style: solid; border-left-color: var(--xp); }
+  input.cond { width: 90px; flex: none; color: var(--xp); }
+  input.cond::placeholder { color: var(--muted); opacity: .6; }
+
+  .options { margin-top: 8px; }
+  .option { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .option .opt-id { width: 110px; flex: none; font-weight: 600; color: var(--xp); }
+  .option .text { flex: 1; }
+  .option .choices { width: 200px; flex: none; }
+  .options > button { font-size: 13px; }
+  .options .hint { color: var(--muted); font-size: 13px; }
+
+  .lines { padding: 6px 10px 0 44px; }
+  .line { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .line select.type { width: 84px; flex: none; }
+  .line .npc { width: 130px; flex: none; }
+  .line .text { flex: 1; }
+  .line .tools { display: flex; gap: 4px; flex: none; }
+  .add { padding: 0 10px 8px 44px; }
+  .note-row { padding: 8px 10px 10px 44px; border-top: 1px solid var(--border); }
+  .note-row input { width: 100%; color: var(--muted); }
+  .note-row input:focus { color: var(--text); }
+  .add select { color: var(--muted); }
+
+  .insert { display: flex; gap: 6px; justify-content: center; padding: 4px 0; opacity: .25; transition: opacity .1s; }
+  .insert:hover, .insert:focus-within { opacity: 1; }
+  .insert button { font-size: 12px; padding: 1px 10px; color: var(--muted); }
+
+  /* Text view */
+  textarea {
+    width: 100%; min-height: 70vh; margin-top: 16px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; resize: vertical;
+    font: 13px/1.5 ui-monospace, Consolas, monospace;
+    tab-size: 2;
+  }
+  .text-tools { display: flex; gap: 8px; align-items: center; margin-top: 8px; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 620px) {
+    .lines, .add, .note-row { padding-left: 10px; }
+    .line { flex-wrap: wrap; }
+    .line .npc { width: auto; flex: 1; }
+    .line .text { flex-basis: 100%; order: 3; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Step Editor</h1>
+    <button id="reopenBtn" hidden></button>
+    <button id="openBtn">Open…</button>
+    <button class="primary" id="saveBtn" title="Ctrl+S" disabled>Save</button>
+    <button id="saveAsBtn" disabled>Save as…</button>
+    <span class="file" id="fileInfo"></span>
+    <span class="spacer"></span>
+    <div class="switch" role="group" aria-label="View">
+      <button data-view="visual">Visual</button>
+      <button data-view="text">Text</button>
+    </div>
+  </header>
+
+  <div id="errors"></div>
+  <main id="visual"></main>
+  <section id="textView" hidden>
+    <textarea id="text" spellcheck="false"></textarea>
+    <div class="text-tools">
+      <button id="applyText">Apply text</button>
+      <span>Edit the raw format directly (see acts/README.md). Switching back to Visual applies it too.</span>
+    </div>
+  </section>
+  <input type="file" id="fileInput" accept=".js" hidden>
+  <datalist id="npcs"></datalist>
+  <datalist id="conds"></datalist>
+</div>
+
+<script src="guide-format.js"></script>
+<script>
+const { ACTIONS, TOWN_KINDS, TOWN_VIA } = GuideFormat;
+const ZONE_TYPES = ACTIONS;
+const TOWN_TYPES = [...TOWN_KINDS, "exit", "go"];
+const KNOWN_NPCS = ["Nessa", "Tarkleigh", "Bestel", "Bench"];
+const PLACEHOLDER = {
+  kill: "Boss name", item: "Quest item", quest: "Quest action", portal: "Where (optional), e.g. at the bridge",
+  trial: "Optional, default: Complete the Trial of Ascendancy",
+  go: "Next zone", do: "Anything else", exit: "portal, wp or any text",
+  get: "Reward", buy: "Item to buy", talk: "What about", craft: "Craft",
+};
+
+// doc: { name, steps: [{ act, isTown, zone, wp, level, cond, lines, note }], options }
+let doc = null;
+let handle = null;      // File System Access handle, if the browser supports it
+let dirty = false;
+let loadErrors = [];    // lines that couldn't be read when opening (dropped on save)
+let view = "visual";
+let textDirty = false;  // text view edited since it was filled
+
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+
+// ---------------------------------------------------------------------------
+// Loading and saving
+// ---------------------------------------------------------------------------
+function toModel(text, name) {
+  const { steps, options, errors } = GuideFormat.parse([{ name, text }]);
+  return {
+    errors,
+    options: options.map(o => ({ ...o, choices: [...o.choices] })),
+    steps: steps.map(s => ({
+      act: s.act, isTown: s.isTown, zone: s.zone, wp: s.wp, level: s.level, cond: s.cond,
+      lines: s.lines.map(l => ({ ...l })), note: s.note,
+    })),
+  };
+}
+
+function setDoc(name, text, h) {
+  const { steps, options, errors } = toModel(text, name);
+  doc = { name, steps, options };
+  handle = h || null;
+  loadErrors = errors;
+  dirty = false;
+  renderAll();
+}
+
+// The last opened/saved file handle is kept in IndexedDB, so the pickers can start in
+// its folder and the file can be reopened with one click after a reload.
+const PICKER = { id: "poe-act-files", types: [{ description: "Act file", accept: { "text/javascript": [".js"] } }] };
+let lastHandle = null;
+
+function idb(mode, fn) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("poeFeelgood.editor", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const tx = req.result.transaction("kv", mode);
+      const r = fn(tx.objectStore("kv"));
+      tx.oncomplete = () => resolve(r && r.result);
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+async function rememberHandle(h) {
+  lastHandle = h;
+  try { await idb("readwrite", store => store.put(h, "lastFile")); } catch {}
+  renderReopen();
+}
+
+async function loadLastHandle() {
+  try { lastHandle = (await idb("readonly", store => store.get("lastFile"))) || null; } catch {}
+  renderReopen();
+}
+
+function renderReopen() {
+  const b = $("reopenBtn");
+  b.hidden = !lastHandle || (handle && lastHandle.name === handle.name);
+  if (lastHandle) b.textContent = "Reopen " + lastHandle.name;
+}
+
+async function reopen() {
+  if (!lastHandle) return;
+  if (dirty && !confirm("Discard unsaved changes?")) return;
+  try {
+    // Must be asked from the click itself; the browser shows its own prompt.
+    if (await lastHandle.queryPermission({ mode: "readwrite" }) !== "granted" &&
+        await lastHandle.requestPermission({ mode: "readwrite" }) !== "granted") return;
+    const file = await lastHandle.getFile();
+    loadJs(file.name, await file.text(), lastHandle);
+  } catch (e) {
+    alert("Could not reopen (the file may have moved): " + e.message);
+  }
+}
+
+async function openFile() {
+  if (dirty && !confirm("Discard unsaved changes?")) return;
+  if (!window.showOpenFilePicker) return $("fileInput").click();
+  try {
+    const [h] = await showOpenFilePicker({ ...PICKER, ...(lastHandle ? { startIn: lastHandle } : {}) });
+    const file = await h.getFile();
+    loadJs(file.name, await file.text(), h);
+    rememberHandle(h);
+  } catch (e) {
+    if (e.name !== "AbortError") alert("Could not open: " + e.message);
+  }
+}
+
+$("fileInput").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (file) loadJs(file.name, await file.text(), null);
+  e.target.value = "";
+});
+
+function loadJs(name, js, h) {
+  const text = GuideFormat.unwrapFile(js);
+  if (text == null) return alert("This doesn't look like an act file (no String.raw`…` block found).");
+  setDoc(name, text, h);
+}
+
+function fileContent() {
+  return GuideFormat.wrapFile(doc.name, GuideFormat.serialize(doc.steps, doc.options));
+}
+
+// Incomplete lines would be skipped by the guide, so ask before writing them.
+function okToSave() {
+  const { errors } = GuideFormat.parse([{ name: doc.name, text: GuideFormat.serialize(doc.steps, doc.options) }]);
+  return !errors.length || confirm(`${errors.length} line(s) are incomplete and will be skipped by the guide (see the red box). Save anyway?`);
+}
+
+async function save() {
+  if (!doc) return;
+  if (view === "text" && !applyText()) return;
+  if (!handle) return saveAs();
+  if (!okToSave()) return;
+  try {
+    const w = await handle.createWritable();
+    await w.write(fileContent());
+    await w.close();
+    saved();
+  } catch (e) {
+    if (e.name !== "AbortError") alert("Could not save: " + e.message);
+  }
+}
+
+async function saveAs() {
+  if (!doc) return;
+  if (view === "text" && !applyText()) return;
+  if (!window.showSaveFilePicker) {
+    if (!okToSave()) return;
+    // No file system access (Firefox, Safari): download instead.
+    const a = el("a");
+    a.href = URL.createObjectURL(new Blob([fileContent()], { type: "text/javascript" }));
+    a.download = doc.name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return saved();
+  }
+  try {
+    const h = await showSaveFilePicker({ ...PICKER, suggestedName: doc.name, ...(lastHandle ? { startIn: lastHandle } : {}) });
+    handle = h;
+    rememberHandle(h);
+    doc.name = h.name;
+    await save();
+  } catch (e) {
+    if (e.name !== "AbortError") alert("Could not save: " + e.message);
+  }
+}
+
+function saved() {
+  dirty = false;
+  loadErrors = [];
+  refresh();
+}
+
+function changed() {
+  dirty = true;
+  scheduleRefresh();
+}
+
+// ---------------------------------------------------------------------------
+// Model edits
+// ---------------------------------------------------------------------------
+function newStep(act, isTown) {
+  return { act, isTown, zone: "", wp: false, level: "", cond: "", lines: [], note: "" };
+}
+
+function actAt(i) {
+  const near = doc.steps[i - 1] || doc.steps[i];
+  if (near) return near.act;
+  const m = doc.name.match(/(\d+)/);
+  return m ? +m[1] : 1;
+}
+
+function insertStep(i, isTown) {
+  doc.steps.splice(i, 0, newStep(actAt(i), isTown));
+  dirty = true;
+  renderAll();
+  const input = document.querySelectorAll(".card")[i]?.querySelector("input[type=text]");
+  if (input) input.focus();
+}
+
+function moveItem(arr, i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  dirty = true;
+  renderAll();
+}
+
+function removeItem(arr, i, ask) {
+  if (ask && !confirm(ask)) return;
+  arr.splice(i, 1);
+  dirty = true;
+  renderAll();
+}
+
+function setLineType(s, l, type) {
+  if (s.isTown && TOWN_KINDS.includes(type)) {
+    l.type = "task";
+    l.kind = type;
+    l.npc = l.npc || "";
+  } else {
+    l.type = type;
+    delete l.kind;
+    delete l.npc;
+    if (type === "town" && !TOWN_VIA[(l.text || "").toLowerCase()]) l.text = "logout";
+  }
+  dirty = true;
+  renderAll();
+}
+
+function addLine(si, type) {
+  const s = doc.steps[si];
+  const l = { type, text: "" };
+  s.lines.push(l);
+  setLineType(s, l, type);
+  const card = document.querySelectorAll(".card")[si];
+  const last = card && card.querySelector(".line:last-child");
+  const input = last && (last.querySelector("input.npc:placeholder-shown") || last.querySelector("input.text, select.via"));
+  if (input) input.focus();
+}
+
+// ---------------------------------------------------------------------------
+// Visual view
+// ---------------------------------------------------------------------------
+let cardRefs = []; // per step: { idEl, titleEl }
+
+function textInput(value, cls, placeholder, onInput, required) {
+  const i = el("input", cls);
+  i.type = "text";
+  i.value = value || "";
+  i.placeholder = placeholder || "";
+  i.required = !!required;
+  i.addEventListener("input", () => { onInput(i.value); changed(); });
+  return i;
+}
+
+function selectEl(options, value, cls, onChange) {
+  const s = el("select", cls);
+  for (const o of options) {
+    const opt = el("option", null, o);
+    opt.value = o;
+    s.append(opt);
+  }
+  s.value = value;
+  s.addEventListener("change", () => onChange(s.value));
+  return s;
+}
+
+function iconBtn(label, title, onClick, disabled, cls) {
+  const b = el("button", "icon" + (cls ? " " + cls : ""), label);
+  b.title = title;
+  b.disabled = !!disabled;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function insertBar(i) {
+  const bar = el("div", "insert");
+  const z = el("button", null, "+ Zone step");
+  z.addEventListener("click", () => insertStep(i, false));
+  const t = el("button", null, "+ Town visit");
+  t.addEventListener("click", () => insertStep(i, true));
+  bar.append(z, t);
+  return bar;
+}
+
+function lineRow(s, l, j) {
+  const row = el("div", "line");
+  const types = s.isTown ? TOWN_TYPES : ZONE_TYPES;
+  const value = l.type === "task" ? l.kind : l.type;
+  row.append(selectEl(types, value, "type", v => setLineType(s, l, v)));
+
+  if (l.type === "task") {
+    const npc = textInput(l.npc, "npc", "NPC", v => { l.npc = v; }, true);
+    npc.setAttribute("list", "npcs");
+    row.append(npc, textInput(l.text, "text", PLACEHOLDER[l.kind], v => { l.text = v; }, true));
+  } else if (l.type === "town") {
+    const current = (l.text || "").toLowerCase();
+    const via = selectEl(["logout", "portal", "wp"], current === "waypoint" ? "wp" : current, "via text", v => { l.text = v; changed(); });
+    row.append(via);
+  } else {
+    row.append(textInput(l.text, "text", PLACEHOLDER[l.type], v => { l.text = v; }, !GuideFormat.OPTIONAL_TEXT.includes(l.type)));
+  }
+
+  row.append(condInput(l, "line-cond"));
+
+  const tools = el("div", "tools");
+  tools.append(
+    iconBtn("↑", "Move up", () => moveItem(s.lines, j, -1), j === 0),
+    iconBtn("↓", "Move down", () => moveItem(s.lines, j, 1), j === s.lines.length - 1),
+    iconBtn("✕", "Remove line", () => removeItem(s.lines, j), false, "del"),
+  );
+  row.append(tools);
+  return row;
+}
+
+// Condition on a route option ("den", "!den", "bandits=oak"); empty means always.
+function condInput(target, cls, onInput) {
+  const i = textInput(target.cond, "cond " + cls, "if…", v => { target.cond = v.trim(); if (onInput) onInput(); });
+  i.setAttribute("list", "conds");
+  i.title = "Only on this route, e.g. den, !den or bandits=oak. Empty: always.";
+  return i;
+}
+
+function flagCheckbox(label, title, checked, onChange) {
+  const l = el("label");
+  l.title = title;
+  const cb = el("input");
+  cb.type = "checkbox";
+  cb.checked = !!checked;
+  cb.addEventListener("change", () => { onChange(cb.checked); changed(); });
+  l.append(cb, label);
+  return l;
+}
+
+function card(s, i) {
+  const c = el("section", "card " + (s.isTown ? "town" : "zone"));
+  c.classList.toggle("conditional", !!s.cond);
+  const head = el("div", "card-head");
+  head.append(el("span", "num", "#" + (i + 1)));
+  let titleEl = null;
+  if (s.isTown) {
+    titleEl = el("span", "town-title", "Town visit");
+    head.append(titleEl);
+  } else {
+    head.append(textInput(s.zone, "zone-name", "Zone name", v => { s.zone = v; }, true));
+    head.append(
+      flagCheckbox("Waypoint", "Activate the waypoint in this zone", s.wp, v => { s.wp = v; }),
+    );
+  }
+  const lvl = el("label", "lvl", "Lvl ");
+  lvl.append(textInput(s.level, "", "–", v => { s.level = v; }));
+  lvl.title = "Level breakpoint, e.g. 4 or 8–10";
+  const idEl = el("span", "id");
+  idEl.title = "Saved progress is tied to this id";
+  const cond = el("label", "", "If ");
+  cond.append(condInput(s, "step-cond", () => c.classList.toggle("conditional", !!s.cond)));
+  head.append(lvl, cond, idEl, el("span", "spacer"),
+    iconBtn("↑", "Move step up", () => moveItem(doc.steps, i, -1), i === 0),
+    iconBtn("↓", "Move step down", () => moveItem(doc.steps, i, 1), i === doc.steps.length - 1),
+    iconBtn("✕", "Delete step", () => removeItem(doc.steps, i, `Delete step #${i + 1}${s.zone ? " (" + s.zone + ")" : ""}?`), false, "del"),
+  );
+  c.append(head);
+
+  const lines = el("div", "lines");
+  s.lines.forEach((l, j) => lines.append(lineRow(s, l, j)));
+  c.append(lines);
+
+  const add = el("div", "add");
+  const types = s.isTown ? TOWN_TYPES : ZONE_TYPES;
+  const sel = selectEl(["", ...types], "", "", v => { if (v) addLine(i, v); });
+  sel.options[0].textContent = "+ Add line…";
+  add.append(sel);
+  c.append(add);
+
+  const note = el("div", "note-row");
+  note.append(textInput(s.note, "", "Note (optional, shown in grey below the step)", v => { s.note = v; }));
+  c.append(note);
+
+  cardRefs[i] = { idEl, titleEl };
+  return c;
+}
+
+// Route options of this file: the player picks one choice each in the guide; steps and
+// lines refer to them in their "If" field.
+function optionsPanel() {
+  const panel = el("section", "options");
+  panel.append(el("h2", "act", "Route options"));
+  doc.options.forEach((o, k) => {
+    const row = el("div", "option");
+    const choices = textInput(o.choices.join("|"), "choices", "yes|no", v => {
+      o.choices = v.split("|").map(c => c.trim()).filter(Boolean);
+    }, true);
+    choices.title = "Choices separated by |, the first one is the default";
+    row.append(
+      textInput(o.id, "opt-id", "name", v => { o.id = v.trim(); }, true),
+      textInput(o.question, "text", "Question shown to the player", v => { o.question = v; }, true),
+      choices,
+      iconBtn("✕", "Remove option", () => removeItem(doc.options, k, `Remove option '${o.id}'? Steps using it will show an error.`), false, "del"),
+    );
+    panel.append(row);
+  });
+  const add = el("button", null, "+ Add option");
+  add.addEventListener("click", () => {
+    doc.options.push({ act: actAt(0), id: "", question: "", choices: ["yes", "no"] });
+    dirty = true;
+    renderAll();
+    const inputs = document.querySelectorAll(".option .opt-id");
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  panel.append(add);
+  if (!doc.options.length) panel.append(el("span", "hint", " Optional detours or route variants the player can choose, e.g. den [yes|no]."));
+  return panel;
+}
+
+function renderAll() {
+  const main = $("visual");
+  main.replaceChildren();
+  cardRefs = [];
+  if (!doc) {
+    main.append(el("div", "empty",
+      "Open an act file (acts/act1.js … act10.js).\n"));
+    main.lastChild.append(el("br"), window.showSaveFilePicker
+      ? "Saving writes straight back into the file."
+      : "This browser can't write files directly: Save downloads the file instead, so replace the old one with it.");
+  } else {
+    main.append(optionsPanel());
+    let act = null;
+    main.append(insertBar(0));
+    doc.steps.forEach((s, i) => {
+      if (s.act !== act) {
+        act = s.act;
+        main.append(el("h2", "act", "Act " + act));
+      }
+      main.append(card(s, i), insertBar(i + 1));
+    });
+  }
+  if (view === "text") fillText();
+  refresh();
+}
+
+// ---------------------------------------------------------------------------
+// Validation, ids, status
+// ---------------------------------------------------------------------------
+let refreshTimer = null;
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refresh, 150);
+}
+
+function refresh() {
+  $("saveBtn").disabled = $("saveAsBtn").disabled = !doc;
+  renderReopen();
+  const info = $("fileInfo");
+  info.replaceChildren();
+  if (doc) {
+    info.append(el("b", null, doc.name));
+    if (dirty) info.append(el("span", "dirty", " • unsaved"));
+    else if (handle) info.append(" • saved");
+  }
+  if (!doc) return showErrors([]);
+
+  // Round-trip through the real parser: shows exactly what the guide will see.
+  const parsed = GuideFormat.parse([{ name: doc.name, text: GuideFormat.serialize(doc.steps, doc.options) }]);
+  parsed.steps.forEach((p, i) => {
+    const ref = cardRefs[i];
+    if (!ref) return;
+    ref.idEl.textContent = p.id;
+    if (ref.titleEl) ref.titleEl.textContent = p.title;
+  });
+
+  const npcs = new Set(KNOWN_NPCS);
+  for (const s of doc.steps) for (const l of s.lines) if (l.npc) npcs.add(l.npc.trim());
+  $("npcs").replaceChildren(...[...npcs].filter(Boolean).sort().map(n => { const o = el("option"); o.value = n; return o; }));
+
+  const conds = [];
+  for (const o of doc.options) {
+    if (!o.id) continue;
+    if (o.choices.includes("yes") && o.choices.includes("no")) conds.push(o.id, "!" + o.id);
+    else for (const c of o.choices) conds.push(`${o.id}=${c}`);
+  }
+  $("conds").replaceChildren(...conds.map(c => { const o = el("option"); o.value = c; return o; }));
+
+  const msgs = [];
+  if (loadErrors.length) {
+    msgs.push("These lines in the opened file could not be read and will be dropped on save:");
+    for (const e of loadErrors) msgs.push(`  line ${e.line}: ${e.msg}\n      ${e.text}`);
+  }
+  if (parsed.errors.length) {
+    if (msgs.length) msgs.push("");
+    msgs.push("Fix these before saving:");
+    for (const e of parsed.errors) msgs.push(`  ${e.msg}\n      ${e.text}`);
+  }
+  showErrors(msgs);
+}
+
+function showErrors(msgs) {
+  $("errors").replaceChildren(...(msgs.length ? [el("div", "errors", msgs.join("\n"))] : []));
+}
+
+// ---------------------------------------------------------------------------
+// Text view
+// ---------------------------------------------------------------------------
+function fillText() {
+  $("text").value = doc ? GuideFormat.serialize(doc.steps, doc.options) : "";
+  textDirty = false;
+}
+$("text").addEventListener("input", () => { textDirty = true; dirty = true; refreshStatusOnly(); });
+
+function refreshStatusOnly() {
+  const info = $("fileInfo");
+  if (doc && !info.querySelector(".dirty")) info.append(el("span", "dirty", " • unsaved"));
+}
+
+// Applies the text view to the model. Returns false (and shows errors) if it can't be read.
+function applyText() {
+  if (!textDirty) return true;
+  const { steps, options, errors } = toModel($("text").value, doc.name);
+  if (errors.length) {
+    showErrors(["Can't apply the text, fix these first:", ...errors.map(e => `  line ${e.line}: ${e.msg}\n      ${e.text}`)]);
+    return false;
+  }
+  doc.steps = steps;
+  doc.options = options;
+  loadErrors = [];
+  dirty = true;
+  renderAll();
+  return true;
+}
+$("applyText").addEventListener("click", applyText);
+
+function setView(v) {
+  if (v === view) return;
+  if (view === "text" && !applyText()) return;
+  view = v;
+  $("visual").hidden = v !== "visual";
+  $("textView").hidden = v !== "text";
+  document.querySelectorAll(".switch button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === view));
+  if (v === "text") fillText();
+}
+document.querySelectorAll(".switch button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+document.querySelectorAll(".switch button").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === view));
+
+// ---------------------------------------------------------------------------
+$("openBtn").addEventListener("click", openFile);
+$("reopenBtn").addEventListener("click", reopen);
+$("saveBtn").addEventListener("click", save);
+$("saveAsBtn").addEventListener("click", saveAs);
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+});
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+if (window.showOpenFilePicker) loadLastHandle();
+renderAll();
+</script>
+</body>
+</html>

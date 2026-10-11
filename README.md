@@ -24,6 +24,20 @@ An interactive leveling guide for the **Path of Exile 1** campaign, Acts 1 to 10
 - Your progress is saved in your browser only. Nothing is sent anywhere: the page doesn't
   load anything from other servers and has no tracking.
 
+## Make your own route
+
+The route lives in plain-text files, one per act (`acts/act1.js` … `act10.js`), and comes
+with a visual editor:
+
+1. Download this repository (Code → Download ZIP) and unpack it.
+2. Open `editor.html` in Chrome or Edge, click "Open…" and pick an act file from the
+   `acts` folder. Edit the steps as cards, then save. Chrome and Edge write straight back
+   into the file; other browsers download the changed file instead.
+3. Open `index.html` to see the guide with your changes.
+
+The file format is described in [`acts/README.md`](acts/README.md), if you'd rather edit the
+files by hand.
+
 ## License
 
 The guide and its route are released under the [MIT License](LICENSE): use them, change
