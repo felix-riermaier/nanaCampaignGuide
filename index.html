@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nanaCampaignGuide · PoE 1</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  /* PoE-inspired dark fantasy: item-tooltip frames, engraved serif capitals (Cinzel) for
+     anything label-like, a book serif (Crimson Pro) for text, and in-game text colours. */
+  :root {
+    --bg: #0b0907;
+    --panel: #120e0a;
+    --panel-2: #1a140e;
+    --border: #3b2c1b;
+    --frame: #6b4f2a;        /* bronze frame lines */
+    --text: #d9cdb8;
+    --muted: #8c7d66;
+    --accent: #c79a52;       /* gold */
+    --accent-strong: #e6be78;
+    --unique: #af6025;       /* unique-item brown: zone names */
+    --town: #2bb3a6;         /* gem teal: town visits */
+    --town-frame: #2c6f69;
+    --done: #6e8f4e;
+    --danger: #c0392b;
+    --xp: #a483d6;
+    --kill: #d65a3a;
+    --quest: #4ae63a;        /* quest-item green */
+    --caps: Cinzel, Georgia, serif;
+    --serif: "Crimson Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    color: var(--text);
+    font: 18px/1.45 var(--serif);
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(120, 80, 30, .18), transparent 60%),
+      radial-gradient(ellipse at 50% 120%, rgba(0, 0, 0, .8), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px 48px; }
+
+  button {
+    font: 13px var(--caps); letter-spacing: .04em; cursor: pointer;
+    border-radius: 2px; border: 1px solid var(--frame);
+    background: linear-gradient(#21190f, #150f09); color: var(--accent);
+    padding: 6px 12px;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent-strong); box-shadow: 0 0 10px rgba(199, 154, 82, .25); }
+  button:disabled { opacity: .4; cursor: default; box-shadow: none; }
+  button[hidden] { display: none; }
+  button.danger:hover { border-color: var(--danger); color: #e8705f; box-shadow: 0 0 10px rgba(192, 57, 43, .3); }
+
+  /* Framed panels, like an item tooltip: bronze line, black inner line, faint inner glow */
+  .focus, .xp, .town-row, .step, dialog {
+    border: 1px solid var(--frame); border-radius: 2px;
+    background: linear-gradient(rgba(26, 20, 14, .96), rgba(14, 11, 8, .98));
+    box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(107, 79, 42, .35), 0 6px 24px rgba(0, 0, 0, .6);
+  }
+  /* A rule that fades out at both ends */
+  .fade-rule, .focus .title::after, .xp .act-end::before, .list-head::before {
+    content: ""; display: block; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--frame), transparent);
+  }
+
+  /* Top: controls and progress */
+  header { padding: 14px 0 0; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; align-items: center; }
+  /* Guide name in Cinzel (its lowercase is small caps), with "Path of Exile 1" below */
+  .toolbar h1 { margin: 0 14px 0 0; display: flex; flex-direction: column; line-height: 1.05; font-weight: 400; }
+  .toolbar h1 .brand { font: 600 22px var(--caps); letter-spacing: .06em; color: var(--accent); text-shadow: 0 0 14px rgba(199, 154, 82, .25); }
+  .toolbar h1 .sub { font: italic 14px var(--serif); letter-spacing: .02em; color: var(--muted); }
+  .toolbar button { padding: 4px 10px; font-size: 12px; }
+  .toolbar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent-strong); }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .icon-btn { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; color: var(--muted); }
+  .toolbar .help-btn { width: 30px; padding: 4px 0; font-weight: 700; color: var(--accent); }
+  .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .progress { flex: 1; height: 4px; background: #1d160e; box-shadow: inset 0 0 0 1px #2c2116; overflow: hidden; }
+  .progress > div { height: 100%; width: 0; transition: width .2s; background: linear-gradient(90deg, #7a4e1c, var(--accent-strong)); box-shadow: 0 0 8px rgba(230, 190, 120, .5); }
+  .count { font: 13px var(--caps); color: var(--muted); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+
+  /* What to do now: the focus card, with level targets beside it */
+  .now { display: flex; gap: 10px; align-items: stretch; }
+  .focus { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 0 0 18px; }
+  .focus.town { border-color: var(--town-frame); }
+  .focus.finished { border-color: var(--done); }
+  /* Header band with the step's context, centred like a tooltip header */
+  .focus-head {
+    position: relative; display: flex; justify-content: center; align-items: center;
+    min-height: 38px; padding: 8px 90px;
+    background: linear-gradient(90deg, transparent, rgba(175, 96, 37, .22), transparent);
+    border-bottom: 1px solid; border-image: linear-gradient(90deg, transparent, var(--frame), transparent) 1;
+  }
+  .focus.town .focus-head { background: linear-gradient(90deg, transparent, rgba(43, 179, 166, .16), transparent); }
+  .focus.finished .focus-head { background: linear-gradient(90deg, transparent, rgba(110, 143, 78, .2), transparent); }
+  .focus .label { font: 12px var(--caps); letter-spacing: .25em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  button.undo { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); padding: 2px 8px; font-size: 11px; color: var(--muted); }
+  .focus .title {
+    margin: 14px 18px 4px; text-align: center;
+    font: 600 30px/1.2 var(--caps); letter-spacing: .04em;
+    color: var(--unique); text-shadow: 0 0 18px rgba(175, 96, 37, .35);
+  }
+  .focus .title::after { width: 70%; margin: 12px auto 4px; }
+  .focus.town .title { color: var(--town); text-shadow: 0 0 18px rgba(43, 179, 166, .3); }
+  .focus.finished .title { color: var(--done); text-shadow: none; }
+  #nextBody { padding: 0 22px; }
+  .focus ul.acts { font-size: 19px; text-align: center; }
+  .focus ul.acts li { padding: 2px 0; }
+  .focus .note { text-align: center; font-size: 16px; }
+
+  .wp-badge, .lvl-badge {
+    display: inline-block; margin-left: 10px; padding: 0 6px; border-radius: 1px;
+    font: 600 11px var(--caps); letter-spacing: .08em; vertical-align: 3px; text-shadow: none;
+    font-variant-numeric: lining-nums;
+  }
+  .wp-badge { border: 1px solid var(--town); color: var(--town); }
+  .lvl-badge { border: 1px solid var(--xp); color: var(--xp); }
+  .focus .title .wp-badge, .focus .title .lvl-badge { font-size: 12px; vertical-align: 7px; }
+
+  /* Action types as coloured small caps */
+  .tag {
+    display: inline-block; margin-right: 10px;
+    font: 600 12px var(--caps); letter-spacing: .12em; text-transform: uppercase;
+    vertical-align: 1px; color: var(--muted);
+  }
+  .tag.kill { color: var(--kill); }
+  .tag.item { color: var(--quest); }
+  .tag.quest { color: #b9a35a; }
+  .tag.trial, .tag.craft { color: var(--xp); }
+  .tag.portal { color: var(--town); }
+  ul.acts { list-style: none; margin: 2px 0 0; padding: 0; }
+  ul.acts li { padding: 1px 0; }
+  .note { font-style: italic; color: var(--muted); margin-top: 2px; font-size: 15px; }
+
+  /* Town tasks, grouped by NPC */
+  .focus-tasks { margin: 6px 0 4px; }
+  .tasks-head { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 8px; font: 12px var(--caps); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .tasks-head button { padding: 1px 10px; font-size: 11px; letter-spacing: .04em; text-transform: none; border-color: var(--town-frame); color: var(--town); background: none; }
+  .tasks-head button:hover { background: rgba(43, 179, 166, .12); color: var(--town); box-shadow: none; }
+  .npc-group { margin-bottom: 12px; text-align: center; }
+  .npc-group .npc { margin-bottom: 4px; font: 600 15px var(--caps); letter-spacing: .08em; color: var(--accent); }
+  .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+
+  /* A town task: the whole tile toggles it */
+  button.tile {
+    display: flex; gap: 10px; align-items: center; text-align: left;
+    padding: 8px 14px 8px 10px;
+    font: 18px var(--serif); letter-spacing: 0; color: var(--text);
+    background: rgba(0, 0, 0, .35); border: 1px solid #2c2116;
+  }
+  button.tile:hover { border-color: var(--town); box-shadow: 0 0 10px rgba(43, 179, 166, .2); color: var(--text); }
+  .tile .check {
+    flex: none; width: 18px; height: 18px; border: 1px solid var(--frame); border-radius: 1px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; line-height: 1; color: var(--done);
+  }
+  .tile .tile-body { display: flex; flex-direction: column; line-height: 1.2; }
+  .tile .kind { font: 600 10px var(--caps); letter-spacing: .16em; text-transform: uppercase; color: var(--town); }
+  .tile .kind.buy { color: var(--accent); }
+  .tile .kind.craft { color: var(--xp); }
+  .tile .kind.talk { color: var(--muted); }
+  button.tile.done { opacity: .45; }
+  .tile.done .check { border-color: var(--done); }
+  .tile.done .tile-text { text-decoration: line-through; color: var(--muted); }
+  button.tile.compact { padding: 3px 10px 3px 8px; font-size: 15px; gap: 8px; }
+  .tile.compact .check { width: 15px; height: 15px; font-size: 11px; }
+  .tile.compact .tile-body { flex-direction: row; align-items: baseline; gap: 6px; }
+  .tile.compact .kind { font-size: 9px; }
+
+  /* The step's way out (go / back to town): an engraved bar that completes the step */
+  button.go-btn {
+    margin: 18px 22px 0; display: flex; justify-content: center; text-align: center;
+    padding: 12px 20px;
+    background: linear-gradient(#2a1f12, #17110a);
+    border: 1px solid var(--accent); color: var(--accent-strong);
+    box-shadow: inset 0 1px 0 rgba(230, 190, 120, .25), inset 0 0 0 3px #120d08, inset 0 0 0 4px rgba(199, 154, 82, .3);
+  }
+  button.go-btn:hover { background: linear-gradient(#3a2a17, #1d150c); color: #fff1cf; box-shadow: inset 0 1px 0 rgba(230, 190, 120, .35), inset 0 0 0 3px #120d08, inset 0 0 0 4px rgba(199, 154, 82, .45), 0 0 18px rgba(230, 190, 120, .25); }
+  .go-btn .go-body { display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+  .go-btn .go-label { font: 11px var(--caps); letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
+  .go-btn .go-text { font: 600 22px var(--caps); letter-spacing: .04em; }
+  .go-btn .go-via { margin-left: 8px; font: italic 17px var(--serif); letter-spacing: 0; opacity: .8; }
+  .go-btn .arrow { display: none; }
+  .focus.town button.go-btn {
+    background: linear-gradient(#10302c, #0a1c1a); border-color: var(--town); color: #9ff0e6;
+    box-shadow: inset 0 1px 0 rgba(159, 240, 230, .2), inset 0 0 0 3px #08130f, inset 0 0 0 4px rgba(43, 179, 166, .35);
+  }
+  .focus.town button.go-btn:hover { background: linear-gradient(#174440, #0c2421); color: #dffcf8; box-shadow: inset 0 0 0 3px #08130f, inset 0 0 0 4px rgba(43, 179, 166, .5), 0 0 18px rgba(43, 179, 166, .25); }
+  .after { margin-top: 8px; text-align: center; font-size: 15px; font-style: italic; color: var(--muted); }
+  .after:empty { display: none; }
+
+  /* Level targets */
+  .xp {
+    flex: none; width: 200px; align-self: flex-start; /* own height: doesn't move when the card grows */
+    padding: 14px; text-align: center;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .xp:empty { display: none; }
+  .xp .label { font: 11px var(--caps); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  .xp .lvl { font: 600 26px/1.15 var(--caps); color: var(--xp); text-shadow: 0 0 14px rgba(164, 131, 214, .35); font-variant-numeric: lining-nums; }
+  .xp .where { font-size: 15px; font-style: italic; color: var(--muted); }
+  .xp .act-end::before { margin-bottom: 8px; }
+  .xp .act-end .lvl { font-size: 18px; }
+
+  /* Missed and upcoming town visits */
+  .town-strip { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .town-strip:empty { display: none; }
+  .town-row { display: flex; gap: 12px; align-items: center; padding: 8px 10px 8px 12px; }
+  .town-row.missed { border-color: #5a2219; box-shadow: inset 0 0 0 1px #000, inset 3px 0 0 #8c2a1c, 0 6px 24px rgba(0, 0, 0, .6); }
+  .town-row .info { flex: 1; min-width: 0; }
+  .town-row .label { font: 600 12px var(--caps); letter-spacing: .18em; text-transform: uppercase; color: var(--town); }
+  .town-row.missed .label { color: #e0604c; }
+  .town-row .label span { font: italic 14px var(--serif); letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .town-row .items { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .town-row .npc { margin-left: 8px; font: 600 14px var(--serif); color: var(--accent); }
+  .town-row .npc:first-child { margin-left: 0; }
+  button.town-done { flex: none; border-color: var(--town-frame); color: var(--town); font-weight: 600; }
+  button.town-done:hover { border-color: var(--town); color: #9ff0e6; box-shadow: 0 0 10px rgba(43, 179, 166, .25); }
+
+  /* Full step list, hidden unless "Show all steps" is on */
+  .list-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 30px 0 0; }
+  .list-head::before { flex-basis: 100%; margin-bottom: 14px; }
+  .list-head h2 { flex: 1; margin: 0; font: 600 18px var(--caps); letter-spacing: .1em; color: var(--accent); }
+  .list-head button { padding: 4px 10px; font-size: 12px; }
+  h2.col { margin: 22px 0 8px; font: 600 14px var(--caps); letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+  ol.steps { list-style: none; margin: 0; padding: 0; }
+  .step { margin-bottom: 5px; overflow: hidden; }
+  .step > .row { display: flex; gap: 12px; align-items: flex-start; padding: 9px 12px; cursor: pointer; user-select: none; }
+  .step:hover { border-color: var(--accent); }
+  input[type=checkbox] {
+    appearance: none; margin: 4px 0 0; width: 17px; height: 17px; flex: none; cursor: pointer;
+    display: inline-grid; place-content: center;
+    border: 1px solid var(--frame); border-radius: 1px; background: rgba(0, 0, 0, .4);
+  }
+  input[type=checkbox]::before { content: "✓"; font: 700 13px/1 var(--serif); color: var(--done); opacity: 0; }
+  input[type=checkbox]:checked { border-color: var(--done); }
+  input[type=checkbox]:checked::before { opacity: 1; }
+  input[type=checkbox]:hover { border-color: var(--accent); }
+  input[type=checkbox]:focus-visible, button:focus-visible { outline: 1px solid var(--accent-strong); outline-offset: 2px; }
+  .step .body { flex: 1; min-width: 0; }
+  .step .title { font: 600 16px var(--caps); letter-spacing: .03em; color: #cfa06a; }
+  .step ul.acts { font-size: 16px; }
+  .step.done > .row { opacity: .45; }
+  .step.done .title { text-decoration: line-through; }
+  .step.current { border-color: var(--accent); }
+  .step.current > .row { background: linear-gradient(90deg, rgba(175, 96, 37, .15), transparent 70%); }
+  .hide-done .step.done, .step[hidden] { display: none; }
+  .hide-done h2.col.all-done { display: none; }
+  .step.town { border-color: var(--town-frame); }
+  .step.town .title { color: var(--town); }
+  .step.town.open.done { border-color: #5a2219; }
+  .step .group { padding: 5px 12px 7px 41px; border-top: 1px solid var(--border); }
+  .step .group-label { margin: 2px 0; font: 600 14px var(--serif); color: var(--accent); }
+  .task { display: flex; gap: 10px; align-items: flex-start; padding: 2px 0; cursor: pointer; font-size: 16px; }
+  .task .tag { font-size: 10px; }
+  .task.done span { text-decoration: line-through; color: var(--muted); }
+
+  .errors {
+    margin-top: 16px; padding: 10px 12px;
+    border: 1px solid var(--danger); border-radius: 2px; background: #2a1210; color: #f0c4b8;
+    font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap;
+  }
+
+  /* Dialogs (route settings, about) */
+  dialog { width: min(540px, calc(100vw - 32px)); padding: 20px 22px; color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .7); }
+  dialog h2 { margin: 0 0 6px; font: 600 22px var(--caps); letter-spacing: .06em; color: var(--accent); }
+  dialog p { margin: 0 0 12px; font-size: 16px; color: var(--muted); }
+  dialog h3 { margin: 16px 0 6px; font: 600 12px var(--caps); letter-spacing: .2em; text-transform: uppercase; color: var(--accent); }
+  dialog fieldset { margin: 0 0 8px; padding: 8px 12px 10px; border: 1px solid var(--border); border-radius: 2px; }
+  dialog legend { padding: 0 4px; font-weight: 600; }
+  dialog label { display: flex; gap: 8px; align-items: center; padding: 2px 0; cursor: pointer; }
+  dialog input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+  dialog button.primary { padding: 8px 18px; font-size: 14px; border-color: var(--accent); color: var(--accent-strong); }
+  .dialog-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+  #helpDialog { width: min(620px, calc(100vw - 32px)); }
+  #helpDialog p, #helpDialog li { color: var(--text); font-size: 17px; }
+  #helpDialog ul { margin: 0 0 12px; padding-left: 20px; }
+  #helpDialog li { margin-bottom: 4px; }
+  #helpDialog li::marker { color: var(--frame); }
+  #helpDialog kbd {
+    padding: 0 5px; border: 1px solid var(--frame); border-radius: 2px; background: var(--panel-2);
+    font: 12px var(--caps); color: var(--accent);
+  }
+
+  footer { margin-top: 36px; text-align: center; font-size: 14px; font-style: italic; color: var(--muted); }
+  footer a { color: var(--accent); }
+
+  @media (max-width: 620px) {
+    .now { flex-direction: column; }
+    .xp { width: auto; align-self: stretch; flex-direction: row; justify-content: space-around; }
+    .xp .act-end::before { display: none; }
+    .focus-head { padding: 8px 80px 8px 12px; justify-content: flex-start; }
+    .focus .title { font-size: 24px; }
+    #nextBody { padding: 0 14px; }
+    button.go-btn { margin: 16px 14px 0; }
+    .go-btn .go-text { font-size: 19px; }
+    .go-btn .go-via { display: block; margin-left: 0; }
+    .toolbar h1 { flex-basis: 100%; margin-bottom: 4px; }
+    button.tile { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="toolbar">
+      <h1><span class="brand">nanaCampaignGuide</span><span class="sub">Path of Exile 1</span></h1>
+      <button id="listBtn" title="Show the full list of steps, e.g. to fix a misclick">Show all steps</button>
+      <button id="routeBtn" title="Choose optional detours and route variants">Route settings</button>
+      <button class="icon-btn help-btn" id="helpBtn" title="About this guide" aria-label="About this guide">?</button>
+      <span class="spacer"></span>
+      <button class="danger icon-btn" id="resetBtn" title="Reset progress" aria-label="Reset progress">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/>
+        </svg>
+      </button>
+    </div>
+    <div class="topbar">
+      <div class="progress"><div id="bar"></div></div>
+      <span class="count" id="count"></span>
+    </div>
+  </header>
+
+  <section class="now">
+    <div class="focus" id="focus">
+      <div class="focus-head">
+        <div class="label" id="nextLabel">Now</div>
+        <button class="undo" id="undoBtn" title="Go back one step. Shortcut: Backspace">← Back</button>
+      </div>
+      <div class="title" id="nextTitle"></div>
+      <div id="nextBody"></div>
+      <button class="go-btn" id="doneBtn" title="Complete this step. Shortcut: Space (Shift+Space also ticks all town tasks)"></button>
+      <div class="after" id="after"></div>
+    </div>
+    <aside class="xp" id="xp" aria-label="Level targets"></aside>
+  </section>
+  <div class="town-strip" id="townStrip"></div>
+
+  <div id="errors"></div>
+
+  <section id="listSection" hidden>
+    <div class="list-head">
+      <h2>All steps</h2>
+      <button id="toggleDone"></button>
+    </div>
+    <main id="list"></main>
+  </section>
+
+  <dialog id="routeDialog">
+    <form method="dialog" id="routeForm">
+      <h2>Your route</h2>
+      <p>Choose which optional parts you want to do. The guide adjusts its steps; you can change this any time under Route settings.</p>
+      <div id="routeOptions"></div>
+      <div class="dialog-actions"><button class="primary" value="save">Save route</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDialog">
+    <form method="dialog">
+      <h2>About this guide</h2>
+      <p>A step-by-step route through the Path of Exile 1 campaign, Acts 1 to 10. It isn't tied to a class or build.</p>
+
+      <h3>What it is</h3>
+      <ul>
+        <li>An efficient route: most quests that don't give anything essential are skipped.</li>
+        <li>Some quest rewards are picked up later on purpose, on a town visit you make anyway, instead of going back for them right away.</li>
+        <li>Essentially how I run my own campaigns.</li>
+      </ul>
+
+      <h3>What it isn't</h3>
+      <ul>
+        <li>Not a speedrun route: it doesn't use every portal trick there is.</li>
+        <li>Not a complete quest guide: optional content only shows up if you pick it in Route settings.</li>
+        <li>Not a build guide: rewards are listed generically (Skill Gem, Passive Point), not which gem to take.</li>
+      </ul>
+
+      <h3>How to use it</h3>
+      <ul>
+        <li>The big button at the bottom of the card completes the step <kbd>Space</kbd>. In town, <kbd>Shift</kbd>+<kbd>Space</kbd> also ticks all town tasks.</li>
+        <li>Click a town task to tick it. Tasks you leave open show up as "Missed" until you tick them.</li>
+        <li>Back undoes the last step <kbd>Backspace</kbd>. "Show all steps" lists everything, e.g. to fix a misclick.</li>
+        <li>Route settings chooses optional detours like the Den or which bandit to help.</li>
+        <li>Progress is saved in this browser only.</li>
+      </ul>
+      <div class="dialog-actions"><button class="primary" value="close">Got it</button></div>
+    </form>
+  </dialog>
+
+  <footer>
+    Progress is stored in this browser only.<br>
+    This is a fan-made guide, not affiliated with or endorsed by Grinding Gear Games.  </footer>
+</div>
+
+<!-- Guide content: one file per act, written in the format described in acts/README.md. -->
+<script>window.GUIDE_ACTS = [];</script>
+<script src="acts/act1.js"></script>
+<script src="acts/act2.js"></script>
+<script src="acts/act3.js"></script>
+<script src="acts/act4.js"></script>
+<script src="acts/act5.js"></script>
+<script src="acts/act6.js"></script>
+<script src="acts/act7.js"></script>
+<script src="acts/act8.js"></script>
+<script src="acts/act9.js"></script>
+<script src="acts/act10.js"></script>
+<script src="guide-format.js"></script>
+
+<script>
+const { steps: STEPS, options: OPTIONS, errors: PARSE_ERRORS } = GuideFormat.parse(window.GUIDE_ACTS);
+
+// ---------------------------------------------------------------------------
+// Progress. Steps are always completed as a prefix of STEPS, so only the id of the
+// last completed step is stored. Town tasks are independent: a set of done task ids.
+// ---------------------------------------------------------------------------
+const KEY = "poeFeelgood.campaign.v2";
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify({ ...state, townDone: [...townDone] })); } catch {}
+}
+const state = load();
+let doneCount = Math.max(0, STEPS.findIndex(s => s.id === state.lastDone) + 1);
+let showDone = state.showDone === true; // completed steps are hidden by default
+let showList = state.showList === true; // the full list is hidden by default
+delete state.mode; // left over from the removed Simple mode
+const townDone = new Set(Array.isArray(state.townDone) ? state.townDone : []);
+// Route options chosen by the player ({ optionId: choice }); missing ones use the default.
+let route = state.route && typeof state.route === "object" ? state.route : {};
+
+// Steps, lines and tasks can depend on route options. Steps that don't apply are hidden
+// but progress stays a prefix of the full list: steps hidden between two visible ones
+// are completed together with the later visible one.
+const on = cond => GuideFormat.matches(cond, route, OPTIONS);
+const active = i => on(STEPS[i].cond);
+const activeActions = s => s.actions.filter(a => on(a.cond));
+const activeTasks = s => s.tasks.filter(t => on(t.cond));
+
+const visible = active;
+function currentIndex() {
+  for (let i = doneCount; i < STEPS.length; i++) if (visible(i)) return i;
+  return STEPS.length;
+}
+function nextVisible(i) {
+  for (let j = i + 1; j < STEPS.length; j++) if (visible(j)) return j;
+  return STEPS.length;
+}
+function lastVisibleDone() {
+  for (let i = doneCount - 1; i >= 0; i--) if (visible(i)) return i;
+  return -1;
+}
+const hasOpenTasks = i => active(i) && activeTasks(STEPS[i]).some(t => !townDone.has(t.id));
+
+function setDoneCount(n) {
+  doneCount = Math.max(0, Math.min(STEPS.length, n));
+  state.lastDone = doneCount ? STEPS[doneCount - 1].id : null;
+  save();
+  render();
+}
+
+function setTasks(ids, done) {
+  for (const id of ids) done ? townDone.add(id) : townDone.delete(id);
+  save();
+  render();
+}
+
+// Completes the current step; with allTasks, also ticks all of its town tasks.
+function completeCurrent(allTasks) {
+  const cur = currentIndex();
+  if (cur >= STEPS.length) return;
+  if (allTasks) for (const t of activeTasks(STEPS[cur])) townDone.add(t.id);
+  setDoneCount(cur + 1);
+}
+
+// ---------------------------------------------------------------------------
+// DOM helpers
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+};
+const tag = type => el("span", "tag " + type, type.toUpperCase());
+
+function titleEl(s) {
+  const t = el("div", "title", s.shownTitle || s.title);
+  if (s.wp) {
+    const wp = el("span", "wp-badge", "WP");
+    wp.title = "Activate the waypoint in this zone";
+    t.append(wp);
+  }
+  if (s.level) t.append(el("span", "lvl-badge", "Lvl " + s.level));
+  return t;
+}
+
+// Actions as a tagged list. Town visits only have exit and go lines here; their tasks
+// are rendered separately.
+function actionList(actions) {
+  const ul = el("ul", "acts");
+  for (const a of actions) {
+    const li = el("li");
+    li.append(tag(a.type), GuideFormat.describe(a));
+    ul.append(li);
+  }
+  return ul;
+}
+
+function notesEl(s) {
+  const frag = document.createDocumentFragment();
+  if (s.note) frag.append(el("div", "note", s.note));
+  return frag;
+}
+
+// Checkbox row for a task in the full list.
+function taskCheckbox(t) {
+  const row = el("label", "task");
+  const cb = el("input");
+  cb.type = "checkbox";
+  cb.checked = townDone.has(t.id);
+  row.classList.toggle("done", cb.checked);
+  cb.addEventListener("change", () => setTasks([t.id], cb.checked));
+  const text = el("span");
+  text.append(tag(t.kind), t.text);
+  row.append(cb, text);
+  return { row, cb };
+}
+
+// Clickable tile for a task in the focus card and the town strip.
+function taskTile(t, compact) {
+  const done = townDone.has(t.id);
+  const b = el("button", "tile" + (done ? " done" : "") + (compact ? " compact" : ""));
+  b.setAttribute("aria-pressed", done);
+  b.title = done ? "Done. Click to untick" : "Click when done";
+  const body = el("span", "tile-body");
+  body.append(el("span", "kind " + t.kind, t.kind), el("span", "tile-text", t.text));
+  b.append(el("span", "check", done ? "✓" : ""), body);
+  b.addEventListener("click", () => setTasks([t.id], !done));
+  return b;
+}
+
+// Tasks grouped by NPC, in order of first appearance.
+function byNpc(tasks) {
+  const groups = new Map();
+  for (const t of tasks) {
+    if (!groups.has(t.npc)) groups.set(t.npc, []);
+    groups.get(t.npc).push(t);
+  }
+  return groups;
+}
+
+// The line that leaves a step (go somewhere / back to town); it becomes the step's button.
+const LEAVE = ["go", "town", "exit"];
+const leaveAction = actions => [...actions].reverse().find(a => LEAVE.includes(a.type));
+
+// ---------------------------------------------------------------------------
+// Full step list, built once per route; render() only updates state.
+// ---------------------------------------------------------------------------
+const list = $("list");
+const rows = [];
+let actHeads = []; // [{ h2, from, to }] step index range per act heading
+
+function buildList() {
+  list.replaceChildren();
+  rows.length = 0;
+  actHeads = [];
+  // Number town visits among the ones on this route, so skipped visits leave no gaps.
+  const visits = {};
+  STEPS.forEach((s, i) => {
+    if (s.isTown && active(i)) {
+      visits[s.act] = (visits[s.act] || 0) + 1;
+      s.shownTitle = `Town visit ${visits[s.act]}`;
+    }
+  });
+  let currentAct = null, ol = null;
+  STEPS.forEach((s, i) => buildRow(s, i, () => {
+    if (s.act !== currentAct) {
+      currentAct = s.act;
+      ol = el("ol", "steps");
+      const h2 = el("h2", "col", "Act " + s.act);
+      actHeads.push({ h2, from: i, to: i });
+      list.append(h2, ol);
+    }
+    actHeads[actHeads.length - 1].to = i;
+    return ol;
+  }));
+}
+
+function buildRow(s, i, getList) {
+  const ol = getList();
+  const li = el("li", "step" + (s.isTown ? " town" : ""));
+  const head = el("div", "row");
+  const cb = el("input");
+  cb.type = "checkbox";
+  cb.setAttribute("aria-label", s.title);
+  const body = el("div", "body");
+  body.append(titleEl(s), actionList(activeActions(s)), notesEl(s));
+  head.append(cb, body);
+  li.append(head);
+  // Ticking a step completes everything up to it; unticking reverts it and everything after.
+  const toggle = () => setDoneCount(i < doneCount ? i : i + 1);
+  head.addEventListener("click", e => { if (e.target !== cb) toggle(); });
+  cb.addEventListener("change", toggle);
+
+  const tasks = [];
+  for (const [npc, ts] of byNpc(activeTasks(s))) {
+    const group = el("div", "group");
+    group.append(el("div", "group-label", npc));
+    for (const t of ts) {
+      const { row, cb } = taskCheckbox(t);
+      group.append(row);
+      tasks.push({ id: t.id, row, cb });
+    }
+    li.append(group);
+  }
+
+  ol.append(li);
+  rows.push({ li, cb, tasks });
+}
+
+if (PARSE_ERRORS.length) {
+  const lines = PARSE_ERRORS.map(e => `${e.file}, line ${e.line}: ${e.msg}\n    ${e.text}`);
+  $("errors").append(el("div", "errors", "Problems in the guide files:\n\n" + lines.join("\n")));
+}
+
+// ---------------------------------------------------------------------------
+// Focus card: the current step
+// ---------------------------------------------------------------------------
+function renderFocus() {
+  const cur = currentIndex();
+  const s = STEPS[cur];
+  const finished = !s;
+  $("focus").classList.toggle("finished", finished);
+  $("focus").classList.toggle("town", !finished && s.isTown);
+  $("nextLabel").textContent = finished ? "All done" : `Now · Act ${s.act}`;
+  $("nextTitle").replaceChildren(...(finished ? ["Campaign complete!"] : titleEl(s).childNodes));
+  const body = $("nextBody");
+  const go = $("doneBtn");
+  body.replaceChildren();
+  go.replaceChildren();
+  go.hidden = finished;
+  $("after").textContent = "";
+  $("undoBtn").disabled = doneCount === 0;
+  if (finished) return;
+
+  const actions = activeActions(s);
+  const leave = leaveAction(actions);
+  if (s.isTown && activeTasks(s).length) body.append(focusTasks(s));
+  const rest = actions.filter(a => a !== leave);
+  if (rest.length) body.append(actionList(rest));
+  body.append(notesEl(s));
+
+  go.append(goBody(leave), el("span", "arrow", "→"));
+
+  // Where the button leads, unless the button already says it (e.g. "GO Coast").
+  const then = STEPS[nextVisible(cur)];
+  const thenTitle = then && (then.shownTitle || then.title);
+  if (thenTitle && !(leave && GuideFormat.describe(leave).toLowerCase().includes(thenTitle.toLowerCase())))
+    $("after").textContent = "Then: " + thenTitle;
+}
+
+// Content of the step's button: a small caption ("Go to", "Back to town") above the
+// destination, with a "(via …)" part split off as a lighter suffix.
+function goBody(leave) {
+  const body = el("span", "go-body");
+  let label = "Step done", text = "Continue", via = "";
+  if (leave && leave.type === "go") {
+    label = "Go to";
+    const m = leave.text.match(/^(.*?)\s*\((via [^)]*)\)\s*$/i);
+    text = m ? m[1] : leave.text;
+    via = m ? m[2] : "";
+  } else if (leave && leave.type === "town") {
+    label = "Back to town";
+    const how = GuideFormat.TOWN_VIA[leave.text.toLowerCase()] || leave.text;
+    text = "via " + how;
+  } else if (leave) {
+    label = "Leave town";
+    text = GuideFormat.describe(leave);
+  }
+  const main = el("span", "go-text", text);
+  if (via) main.append(el("span", "go-via", via));
+  body.append(el("span", "go-label", label), main);
+  return body;
+}
+
+function focusTasks(s) {
+  const box = el("div", "focus-tasks");
+  const tasks = activeTasks(s);
+  const head = el("div", "tasks-head");
+  head.append(el("span", null, "Town tasks"));
+  if (tasks.some(t => !townDone.has(t.id))) {
+    const all = el("button", null, "Tick all");
+    all.addEventListener("click", () => setTasks(tasks.map(t => t.id), true));
+    head.append(all);
+  }
+  box.append(head);
+  for (const [npc, ts] of byNpc(tasks)) {
+    const group = el("div", "npc-group");
+    const tiles = el("div", "tiles");
+    for (const t of ts) tiles.append(taskTile(t));
+    group.append(el("div", "npc", npc), tiles);
+    box.append(group);
+  }
+  return box;
+}
+
+// ---------------------------------------------------------------------------
+// Town strip and level targets
+// ---------------------------------------------------------------------------
+
+// Every passed visit with open tasks ("missed"), plus the next visit with open tasks
+// after the current step. The current step's own tasks are in the focus card.
+function renderTownStrip() {
+  const strip = $("townStrip");
+  strip.replaceChildren();
+  const cur = currentIndex();
+  const missed = [];
+  let next = -1;
+  STEPS.forEach((s, i) => {
+    if (!hasOpenTasks(i)) return;
+    if (i < doneCount) missed.push(i);
+    else if (i > cur && next < 0) next = i;
+  });
+  for (const i of missed) strip.append(townRow(STEPS[i], "missed", "Missed"));
+  if (next >= 0) strip.append(townRow(STEPS[next], "", "Next town"));
+}
+
+function townRow(s, cls, label) {
+  const row = el("div", "town-row " + cls);
+  const info = el("div", "info");
+  const lab = el("div", "label", label + " ");
+  lab.append(el("span", null, `${s.shownTitle || s.title} · Act ${s.act}`));
+  const items = el("div", "items");
+  const tasks = activeTasks(s);
+  for (const [npc, ts] of byNpc(tasks)) {
+    items.append(el("span", "npc", npc));
+    for (const t of ts) items.append(taskTile(t, true));
+  }
+  info.append(lab, items);
+  const btn = el("button", "town-done", "Tick all");
+  btn.title = "Tick all tasks of this town visit";
+  btn.addEventListener("click", () => setTasks(tasks.map(t => t.id), true));
+  row.append(info, btn);
+  return row;
+}
+
+// Level targets: the next breakpoint ahead of the progress, and the final breakpoint of
+// that act.
+function renderXp() {
+  const box = $("xp");
+  box.replaceChildren();
+  const next = STEPS.findIndex((s, i) => i >= doneCount && s.level && active(i));
+  if (next < 0) return;
+  const s = STEPS[next];
+  let actEnd = -1;
+  STEPS.forEach((t, i) => { if (t.act === s.act && t.level && active(i)) actEnd = i; });
+
+  const where = t => {
+    const acts = activeActions(t);
+    const main = acts.find(a => a.type === "kill") || acts[0];
+    return main ? `${t.zone}: ${GuideFormat.describe(main)}` : t.zone;
+  };
+  const part = (cls, label, t) => {
+    const d = el("div", cls);
+    d.append(el("div", "label", label), el("div", "lvl", "Lvl " + t.level), el("div", "where", where(t)));
+    box.append(d);
+  };
+  if (next === actEnd) {
+    part("", `Next · end of Act ${s.act}`, s);
+  } else {
+    part("", "Next level target", s);
+    part("act-end", `End of Act ${s.act}`, STEPS[actEnd]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+function render() {
+  const cur = currentIndex();
+  let total = 0, done = 0;
+  rows.forEach(({ li, cb, tasks }, i) => {
+    const isDone = i < doneCount;
+    const isVisible = visible(i);
+    cb.checked = isDone;
+    li.classList.toggle("done", isDone);
+    li.classList.toggle("current", i === cur);
+    li.classList.toggle("open", hasOpenTasks(i));
+    li.hidden = !isVisible;
+    for (const t of tasks) {
+      t.cb.checked = townDone.has(t.id);
+      t.row.classList.toggle("done", t.cb.checked);
+    }
+    if (isVisible) { total++; if (isDone) done++; }
+  });
+  // Act headings disappear with "hide completed" once the whole act is done.
+  for (const h of actHeads) h.h2.classList.toggle("all-done", h.to < doneCount);
+  list.classList.toggle("hide-done", !showDone);
+  $("listSection").hidden = !showList;
+  $("listBtn").setAttribute("aria-pressed", showList);
+  $("listBtn").textContent = showList ? "Hide all steps" : "Show all steps";
+  $("toggleDone").textContent = showDone ? "Hide completed" : `Show completed (${done})`;
+  $("bar").style.width = (total ? done / total * 100 : 0) + "%";
+  $("count").textContent = `${done} / ${total}`;
+
+  renderFocus();
+  renderTownStrip();
+  renderXp();
+}
+
+// Scrolls the full list to the current step (when the list is shown).
+function scrollToCurrent() {
+  const row = rows[currentIndex()];
+  if (!showList || !row) return;
+  const y = row.li.getBoundingClientRect().top + window.scrollY - 12;
+  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+}
+
+$("doneBtn").addEventListener("click", e => { completeCurrent(false); e.currentTarget.blur(); });
+$("undoBtn").addEventListener("click", () => setDoneCount(lastVisibleDone()));
+$("listBtn").addEventListener("click", () => {
+  showList = !showList;
+  state.showList = showList;
+  save();
+  render();
+  scrollToCurrent();
+});
+$("toggleDone").addEventListener("click", () => {
+  showDone = !showDone;
+  state.showDone = showDone;
+  save();
+  render();
+  scrollToCurrent();
+});
+$("resetBtn").addEventListener("click", () => {
+  if (!confirm("Reset all progress, including town tasks?")) return;
+  townDone.clear();
+  setDoneCount(0);
+  window.scrollTo({ top: 0 });
+  if (OPTIONS.length) openRoute();
+});
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, button, textarea, label, dialog") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === "Space") { e.preventDefault(); completeCurrent(e.shiftKey); }
+  if (e.code === "Backspace") { e.preventDefault(); $("undoBtn").click(); }
+});
+
+// ---------------------------------------------------------------------------
+// Route options dialog: shown on a fresh start, and from the "Route" button.
+// ---------------------------------------------------------------------------
+const choiceLabel = c => c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " ");
+
+function openRoute() {
+  const body = $("routeOptions");
+  body.replaceChildren();
+  let act = null;
+  for (const o of OPTIONS) {
+    if (o.act !== act) {
+      act = o.act;
+      body.append(el("h3", null, "Act " + act));
+    }
+    const field = el("fieldset");
+    field.append(el("legend", null, o.question));
+    const current = route[o.id] || o.choices[0];
+    o.choices.forEach((c, n) => {
+      const label = el("label");
+      const radio = el("input");
+      radio.type = "radio";
+      radio.name = o.id;
+      radio.value = c;
+      radio.checked = c === current;
+      label.append(radio, choiceLabel(c) + (n === 0 ? " (default)" : ""));
+      field.append(label);
+    });
+    body.append(field);
+  }
+  $("routeDialog").showModal();
+}
+
+$("routeForm").addEventListener("submit", () => {
+  const next = {};
+  for (const o of OPTIONS) {
+    const checked = $("routeForm").querySelector(`input[name="${CSS.escape(o.id)}"]:checked`);
+    next[o.id] = checked ? checked.value : o.choices[0];
+  }
+  route = next;
+  state.route = route;
+  state.routeSet = true;
+  save();
+  buildList();
+  render();
+  scrollToCurrent();
+});
+$("routeBtn").addEventListener("click", openRoute);
+$("helpBtn").addEventListener("click", () => $("helpDialog").showModal());
+$("routeBtn").hidden = !OPTIONS.length;
+
+buildList();
+render();
+scrollToCurrent();
+if (OPTIONS.length && !state.routeSet) openRoute();
+</script>
+</body>
+</html>
